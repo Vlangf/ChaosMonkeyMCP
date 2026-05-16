@@ -1,0 +1,15 @@
+[project]
+name = "chaosmonkey-ai"
+version = "0.1.0"
+description = "AI-powered fault injection and reliability testing"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=0.1.0",
+    "pydantic>=2.13.4",
+    "rich>=15.0.0",
+    "typer>=0.25.1",
+]
+
+[project.scripts]
+chaosmonkey = "chaosmonkey.main:app"

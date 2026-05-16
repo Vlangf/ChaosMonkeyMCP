@@ -1,0 +1,17 @@
+
+__pycache__/
+
+*.pyc
+
+.venv/
+
+.env
+
+.env.*
+
+CHAOS_REPORT.md
+
+CHAOS_REMEDIATION.md
+
+.DS_Store
+
