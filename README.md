@@ -6,7 +6,7 @@ Local MCP server for autonomous fault injection and crash discovery.
 
 <video src="./chm_ibm_bob_mcp.mov" controls width="100%"></video>
 
-If the video preview is not rendered by your Markdown viewer, open it directly: [chm_ibm_bob_mcp.mov](./chm_ibm_bob_mcp.mov).
+If the video preview is not rendered by your Markdown viewer, open it directly: [chm_ibm_bob_mcp.mp4](./chm_ibm_bob_mcp.mov).
 
 ChaosMonkey MCP exposes provider-agnostic tools that an AI client can use to mutate inputs, run chaos tests, execute local commands, and inspect logs or reports. It is designed for MCP-compatible clients such as IBM Bob, Claude, Cursor, and Codex.
 
