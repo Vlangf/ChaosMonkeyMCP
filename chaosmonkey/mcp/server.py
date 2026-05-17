@@ -926,7 +926,8 @@ TOOL_METADATA = {
 
 
 if __name__ == "__main__":
-    # Run the MCP server
-    mcp.run()
+    # Run the MCP server in stdio mode without the FastMCP ASCII banner.
+    # Some MCP clients, including IBM Bob, treat any non-protocol stdout as an error.
+    mcp.run(show_banner=False)
 
 # Made with Bob

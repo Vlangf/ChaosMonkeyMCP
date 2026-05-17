@@ -1,268 +1,196 @@
-# ChaosMonkey AI
+# ChaosMonkey MCP
 
-**MCP-First Autonomous Fault Injection & Crash Discovery**
+Local MCP server for autonomous fault injection and crash discovery.
 
-ChaosMonkey AI is an autonomous chaos engineering platform that uses AI agents (Bob, Claude, Codex, etc.) to inject faults, run target applications, detect crashes, and generate structured resilience reports through MCP (Model Context Protocol) tools.
+## Demo
 
-## 🎯 Core Concept
+<video src="./chm_ibm_bob_mcp.mov" controls width="100%"></video>
 
-ChaosMonkey performs **autonomous fault injection and crash discovery only**. It does NOT fix code, write files, create branches, or open PRs.
+If the video preview is not rendered by your Markdown viewer, open it directly: [chm_ibm_bob_mcp.mov](./chm_ibm_bob_mcp.mov).
 
-AI agents connect to ChaosMonkey through MCP tools to:
+ChaosMonkey MCP exposes provider-agnostic tools that an AI client can use to mutate inputs, run chaos tests, execute local commands, and inspect logs or reports. It is designed for MCP-compatible clients such as IBM Bob, Claude, Cursor, and Codex.
 
-1. **Inject faults** into data structures (`inject_null_fault`)
-2. **Run chaos tests** on target applications (`run_chaos_test`)
-3. **Execute commands** for testing across any stack (`run_command`)
-4. **Read reports** and logs after chaos runs (`read_file`)
+ChaosMonkey MCP does not fix code, modify repositories, create branches, open pull requests, or write patches.
 
-## 🏗️ Architecture
+## What it does
 
-```
-chaosmonkey/
-├── tools/           # MCP tool implementations
-│   ├── fault_injection.py    # inject_null_fault
-│   ├── observation.py         # Crash observation utilities
-│   ├── testing.py             # Test execution helpers
-│   └── analysis.py            # Crash analysis utilities
-├── core/            # Core chaos engineering logic
-│   ├── executor.py            # Fault execution engine
-│   ├── observer.py            # Crash detection and observation
-│   ├── models.py              # Data models (CrashReport, FaultConfig)
-│   └── utils.py               # Utilities
-└── mcp/             # MCP server implementation
-    ├── server.py              # MCP server with 4 core tools
-    └── schemas.py             # Tool schemas
-```
+ChaosMonkey MCP helps AI agents find resilience issues in local development projects.
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for detailed design.
+It can:
 
-## 🚀 Quick Start
+- inject null faults into JSON-like payloads
+- run repeated chaos tests against Python targets
+- execute local test/build commands with basic safety checks
+- read local logs and reports inside the project root
+- return structured crash data, tracebacks, stdout, and stderr
 
-### Installation
+It only performs fault injection, command execution, report/log reading, and crash discovery.
+
+## Core tools
+
+`inject_null_fault_tool`
+
+Mutates a JSON payload by replacing nested values with `null`.
+
+Inputs:
+
+- `data`: JSON string
+- `probability`: chance of replacing a value, default `0.3`
+- `seed`: optional deterministic seed
+
+Returns mutated data, mutation count, and error metadata.
+
+`run_chaos_test`
+
+Injects null faults into a payload and executes a target Python file.
+
+Inputs:
+
+- `target_path`: path to a `.py` file
+- `payload`: JSON string passed to the target function after mutation
+- `probability`: fault probability, default `0.3`
+- `seed`: optional deterministic seed
+- `iterations`: number of chaos iterations, default `1`
+
+Returns whether a crash was detected, the crashing payload, traceback, error type, stdout, stderr, and exit code.
+
+`run_command`
+
+Executes a local shell command for tests, builds, or project-specific checks.
+
+Inputs:
+
+- `command`: shell command
+- `cwd`: optional working directory
+- `timeout_seconds`: command timeout, default `30`, max `300`
+
+Returns exit code, stdout, stderr, duration, and command metadata. Dangerous command patterns such as destructive `rm`, `sudo`, shutdown, reboot, and disk-formatting commands are blocked.
+
+`read_file`
+
+Reads a local text file from the project root.
+
+Inputs:
+
+- `path`: file path relative to the project root
+- `max_bytes`: read limit, default `20000`, max `1000000`
+
+Returns file content, truncation status, file size, and error metadata. Paths outside the project root and common secret files are blocked.
+
+## Installation
+
+Requirements:
+
+- Python `>=3.14`
+- `uv`
+
+Install dependencies:
 
 ```bash
-# Install dependencies
 uv sync
-
-# Test installation
-chaosmonkey test
 ```
 
-### Chaos Execution Flow
-
-Execute the complete chaos engineering workflow on [`target_app.py`](target_app.py):
+Check the CLI entrypoint:
 
 ```bash
-# Run chaos execution with default settings
-uv run python -m chaosmonkey.main chaos
-
-# Use deterministic seed for reproducible results
-uv run python -m chaosmonkey.main chaos --seed 42
-
-# Control fault injection probability
-uv run python -m chaosmonkey.main chaos --probability 0.5 --seed 123
+uv run chaosmonkey test
 ```
 
-**What it does:**
-1. Generates mutated payload using `inject_null_fault`
-2. Executes target function with mutated payload
-3. Captures exceptions, traceback, and crash type
-4. Prints structured chaos report with rich formatting
+## Start MCP server
 
-### Demo: Null Fault Injection
-
-Test the `inject_null_fault` tool in isolation:
+Run the local stdio MCP server:
 
 ```bash
-# Use example data
-uv run python -m chaosmonkey.main demo
-
-# Inject nulls into custom JSON
-uv run python -m chaosmonkey.main demo --input '{"user": {"name": "John", "age": 30}}'
-
-# Control probability and use deterministic seed
-uv run python -m chaosmonkey.main demo \
-  --input '{"profile": {"name": "Alice"}}' \
-  --probability 0.5 \
-  --seed 42
-
-# Pipe JSON from stdin
-echo '{"items": [1, 2, 3]}' | uv run python -m chaosmonkey.main demo
+uv run python -m chaosmonkey.mcp.server
 ```
 
-**Programmatic Usage:**
+The server runs locally over stdio. MCP clients start it as a subprocess and communicate with it through the Model Context Protocol.
 
-```python
-from chaosmonkey.tools import inject_null_fault
+## MCP client setup
 
-data = {
-    "profile": {
-        "name": "John",
-        "email": "john@example.com"
+Use the same server command in any MCP-compatible client:
+
+```json
+{
+  "mcpServers": {
+    "chaosmonkey": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "chaosmonkey.mcp.server"],
+      "cwd": "/absolute/path/to/chaosmonkey-ai"
     }
+  }
 }
-
-# Inject nulls with 30% probability
-mutated = inject_null_fault(data, probability=0.3, seed=42)
-
-# Example output:
-# {
-#     "profile": {
-#         "name": None,
-#         "email": "john@example.com"
-#     }
-# }
 ```
 
-### Legacy Mode (Current)
+Set `cwd` to this repository path.
 
-Run a Python file and analyze crashes:
+Known compatible clients:
+
+- IBM Bob
+- Claude Desktop / Claude Code MCP clients
+- Cursor
+- Codex MCP clients
+- other stdio MCP clients
+
+For local inspection:
 
 ```bash
-chaosmonkey run target_app.py
+npx @modelcontextprotocol/inspector uv run python -m chaosmonkey.mcp.server
 ```
 
-### MCP Mode (Future)
+## Example AI workflow
 
-Start the MCP server for AI agents:
+Prompt an MCP client connected to the server:
 
-```bash
-chaosmonkey serve --host localhost --port 8080
+```text
+Use ChaosMonkey to test this Python target for null-handling crashes.
+Only inject faults, run tests, execute commands, and read logs/reports.
+Do not modify files or propose repository changes.
 ```
 
-> **Note**: MCP server implementation is pending. See [Architecture](#architecture) for details.
+A typical agent flow:
 
-## 🛠️ Core MCP Tools
+1. Inspect the target command or Python entrypoint.
+2. Build a representative JSON payload.
+3. Call `inject_null_fault_tool` or `run_chaos_test` with deterministic seeds.
+4. Use `run_command` to run the relevant test command.
+5. Use `read_file` to inspect generated logs or reports.
+6. Report crashes, resilience issues, tracebacks, and reproducible inputs.
 
-ChaosMonkey exposes 4 production-ready MCP tools for fault injection and crash discovery:
+ChaosMonkey MCP stops at discovery.
 
-### 1. inject_null_fault
-Mutate data structures by randomly replacing nested values with None to simulate missing data, null pointer scenarios, and incomplete API responses.
+## Architecture
 
-**Parameters:**
-- `data` (string): JSON string of input dictionary to mutate
-- `probability` (float): Chance (0.0-1.0) of replacing values with None (default: 0.3)
-- `seed` (int, optional): Random seed for deterministic behavior
-
-**Returns:** Mutated payload with metadata about mutations
-
-### 2. run_chaos_test
-Execute chaos tests by injecting faults and running target Python applications. Captures crashes, errors, tracebacks, and identifies which mutated payload caused the failure.
-
-**Parameters:**
-- `target_path` (string): Path to target Python file
-- `payload` (string): JSON string of input data to mutate
-- `probability` (float): Fault injection probability (default: 0.3)
-- `seed` (int, optional): Random seed for deterministic behavior
-- `iterations` (int): Number of chaos iterations (default: 1)
-
-**Returns:** Structured crash report with error details and traceback
-
-### 3. run_command
-Execute shell commands for running tests across any stack (pytest, npm test, cargo test, go test, etc.). Includes safety checks to block dangerous commands.
-
-**Parameters:**
-- `command` (string): Shell command to execute
-- `cwd` (string, optional): Working directory
-- `timeout_seconds` (int): Timeout in seconds (default: 30, max: 300)
-
-**Returns:** Exit code, stdout, stderr, and execution duration
-
-### 4. read_file
-Safely read local files (reports, logs, chaos results) after chaos runs. Includes security checks to prevent reading sensitive files or paths outside project root.
-
-**Parameters:**
-- `path` (string): File path relative to project root
-- `max_bytes` (int): Maximum bytes to read (default: 20000, max: 1000000)
-
-**Returns:** File content with truncation metadata
-
-See [`MCP_TOOLS.md`](MCP_TOOLS.md) for detailed documentation.
-
-## 🤖 AI Agent Workflow
-
-ChaosMonkey focuses on **fault injection and crash discovery**. AI agents use the tools to find bugs, not fix them.
-
-```python
-# 1. Inject null faults into payload
-result = inject_null_fault(
-    data='{"user": {"profile": {"name": "John"}}}',
-    probability=0.5,
-    seed=42
-)
-
-# 2. Run chaos test on target application
-crash_report = run_chaos_test(
-    target_path="target_app.py",
-    payload='{"user": {"profile": {"name": "John"}}}',
-    probability=0.5,
-    seed=42
-)
-
-# 3. Read generated crash report
-report = read_file(path="chaos_report.json")
-
-# 4. Run regression tests to verify resilience
-test_result = run_command(command="pytest tests/test_null_safety.py")
-
-# AI agent analyzes crash reports and generates insights
-# Remediation is handled separately by other tools/workflows
+```text
+chaosmonkey/
+├── mcp/
+│   ├── server.py      # FastMCP stdio server and tool implementations
+│   ├── schemas.py     # Typed tool metadata and response schemas
+│   └── __main__.py    # module entrypoint
+├── tools/
+│   └── fault_injection.py
+└── core/
+    ├── executor.py    # fault execution and crash capture
+    ├── observer.py    # observation utilities
+    └── models.py      # crash/fault models
 ```
 
-## 📋 Roadmap
+Runtime model:
 
-**Completed:**
-- [x] Design MCP-first architecture
-- [x] Implement `inject_null_fault` tool
-- [x] Implement `run_chaos_test` tool
-- [x] Implement `run_command` tool
-- [x] Implement `read_file` tool
-- [x] Add CLI demo and chaos commands
-- [x] Implement chaos execution flow (executor + observer)
-- [x] Production-ready MCP server with FastMCP
-
-**Future Enhancements:**
-- [ ] Additional fault types (latency, corruption, timeouts)
-- [ ] Support for more languages (JavaScript, Go, Rust, Java)
-- [ ] Integration with Sentry for production incident analysis
-- [ ] Integration with IBM Bob MCP for AI-powered crash analysis
-- [ ] Integration with watsonx for advanced AI reasoning
-- [ ] Distributed system chaos testing support
-
-## 🔧 Development
-
-```bash
-# Run tests
-pytest
-
-# Type checking
-mypy chaosmonkey
-
-# Format code
-black chaosmonkey
-
-# Lint
-ruff check chaosmonkey
+```text
+AI client -> local MCP stdio server -> ChaosMonkey tools -> target project
 ```
 
-## 📚 Documentation
+The server is local-first and provider-agnostic. It does not call an LLM provider itself.
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) - Detailed architecture design
-- Tool documentation - See individual tool modules in [`chaosmonkey/tools/`](chaosmonkey/tools/)
+## Roadmap
 
-## 🎯 Design Principles
+- additional fault injectors beyond null mutation
+- stronger command sandboxing
+- richer crash report formats
+- broader target execution adapters
+- more MCP client setup examples
 
-1. **MCP-First** - All operations exposed as MCP tools
-2. **Fault Injection Only** - Focus on finding bugs, not fixing them
-3. **Crash Discovery** - Detect and report failures with structured data
-4. **Provider-Agnostic** - Works with any MCP-compatible AI agent (Bob, Claude, Cursor, Codex)
-5. **Safe** - Controlled fault injection with security checks
-6. **Cross-Stack** - Test any language/framework via `run_command`
-
-## 📝 License
+## License
 
 MIT
-
----
-
-**Made with ❤️ for autonomous chaos engineering**
